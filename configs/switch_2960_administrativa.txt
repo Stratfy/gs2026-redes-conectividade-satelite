@@ -1,0 +1,113 @@
+!==============================================================================
+! CONFIGURACAO CISCO 2960 - Switch da REDE ADMINISTRATIVA
+! Escola Municipal Rural de Colniza-MT - Global Solution 2026 (Stratfy)
+!
+! Funcao: switch de acesso da coordenacao, secretaria e diretoria.
+! Rede atendida: 192.168.10.64/26 (gateway 192.168.10.65 no Cisco 1941).
+! Uplink: porta FastEthernet0/24 -> GigabitEthernet0/1 do R-COLNIZA.
+!
+! VLAN de acesso: VLAN 20 (ADMINISTRATIVA). Hosts recebem IP via DHCP.
+!==============================================================================
+
+enable
+configure terminal
+
+!------------------------------------------------------------------------------
+! 1) Identificacao e seguranca basica
+!------------------------------------------------------------------------------
+hostname SW-ADMINISTRATIVA
+!
+enable secret Stratfy@2026
+service password-encryption
+no ip domain-lookup
+!
+banner motd #
+  ==================================================================
+   SW-ADMINISTRATIVA - Coordenacao + Administracao (192.168.10.64/26)
+   Acesso restrito - Escola Rural de Colniza-MT - GS 2026
+  ==================================================================
+#
+!
+line console 0
+ password Console@2026
+ login
+ logging synchronous
+ exec-timeout 10 0
+exit
+!
+username admin privilege 15 secret Admin@2026
+line vty 0 15
+ login local
+ transport input ssh
+exit
+
+!------------------------------------------------------------------------------
+! 2) VLAN da rede administrativa + IP de gerencia
+!------------------------------------------------------------------------------
+vlan 20
+ name ADMINISTRATIVA
+exit
+!
+! IP de gerencia do switch (dentro da faixa administrativa, fora do pool):
+! usamos 192.168.10.126 (ultimo host util da /26 administrativa).
+interface Vlan20
+ description Gerencia SW-ADMINISTRATIVA
+ ip address 192.168.10.126 255.255.255.192
+ no shutdown
+exit
+!
+ip default-gateway 192.168.10.65
+
+!------------------------------------------------------------------------------
+! 3) Portas de acesso da administracao (Fa0/1 - Fa0/12) na VLAN 20
+!------------------------------------------------------------------------------
+interface range FastEthernet0/1 - 12
+ description Acesso PCs - Coordenacao/Secretaria/Diretoria
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+exit
+
+!------------------------------------------------------------------------------
+! 4) Port-security basica nas portas de acesso
+!------------------------------------------------------------------------------
+interface range FastEthernet0/1 - 12
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+exit
+
+!------------------------------------------------------------------------------
+! 5) Uplink para o roteador 1941
+!    Fa0/24 -> G0/1 do R-COLNIZA (gateway 192.168.10.65)
+!------------------------------------------------------------------------------
+interface FastEthernet0/24
+ description UPLINK -> R-COLNIZA G0/1 (gateway 192.168.10.65)
+ switchport mode access
+ switchport access vlan 20
+exit
+
+!------------------------------------------------------------------------------
+! 6) Desliga portas nao usadas
+!------------------------------------------------------------------------------
+interface range FastEthernet0/13 - 23
+ description Porta nao utilizada - desativada
+ shutdown
+exit
+!
+interface range GigabitEthernet0/1 - 2
+ description Porta nao utilizada - desativada
+ shutdown
+exit
+
+!------------------------------------------------------------------------------
+! 7) Encerramento
+!------------------------------------------------------------------------------
+end
+write memory
+
+!==============================================================================
+! VERIFICACAO: show vlan brief | show interfaces status | show port-security
+!==============================================================================
