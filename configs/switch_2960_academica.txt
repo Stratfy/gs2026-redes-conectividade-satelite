@@ -1,0 +1,113 @@
+!==============================================================================
+! CONFIGURACAO CISCO 2960 - Switch da REDE ACADEMICA
+! Escola Municipal Rural de Colniza-MT - Global Solution 2026 (Stratfy)
+!
+! Funcao: switch de acesso das salas de aula e do laboratorio de informatica.
+! Rede atendida: 192.168.10.0/26 (gateway 192.168.10.1 no Cisco 1941).
+! Uplink: porta FastEthernet0/24 -> GigabitEthernet0/0 do R-COLNIZA.
+!
+! VLAN de acesso: VLAN 10 (ACADEMICA). Hosts recebem IP via DHCP do router.
+!==============================================================================
+
+enable
+configure terminal
+
+!------------------------------------------------------------------------------
+! 1) Identificacao e seguranca basica
+!------------------------------------------------------------------------------
+hostname SW-ACADEMICA
+!
+enable secret Stratfy@2026
+service password-encryption
+no ip domain-lookup
+!
+banner motd #
+  ==============================================================
+   SW-ACADEMICA - Salas + Laboratorio (rede 192.168.10.0/26)
+   Acesso restrito - Escola Rural de Colniza-MT - GS 2026
+  ==============================================================
+#
+!
+line console 0
+ password Console@2026
+ login
+ logging synchronous
+ exec-timeout 10 0
+exit
+!
+username admin privilege 15 secret Admin@2026
+line vty 0 15
+ login local
+ transport input ssh
+exit
+
+!------------------------------------------------------------------------------
+! 2) VLAN da rede academica + IP de gerencia
+!------------------------------------------------------------------------------
+vlan 10
+ name ACADEMICA
+exit
+!
+! IP de gerencia do switch (dentro da faixa, fora do pool DHCP):
+! usamos 192.168.10.62 (ultimo host util) para o SVI de gerencia.
+interface Vlan10
+ description Gerencia SW-ACADEMICA
+ ip address 192.168.10.62 255.255.255.192
+ no shutdown
+exit
+!
+ip default-gateway 192.168.10.1
+
+!------------------------------------------------------------------------------
+! 3) Portas de acesso dos alunos (Fa0/1 - Fa0/20) na VLAN 10
+!------------------------------------------------------------------------------
+interface range FastEthernet0/1 - 20
+ description Acesso PCs/Notebooks - Sala/Laboratorio
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+exit
+
+!------------------------------------------------------------------------------
+! 4) Port-security basica nas portas de acesso (maximo 2 MACs por porta)
+!------------------------------------------------------------------------------
+interface range FastEthernet0/1 - 20
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+exit
+
+!------------------------------------------------------------------------------
+! 5) Uplink para o roteador 1941 (porta trunk/acesso para a VLAN 10)
+!    Fa0/24 -> G0/0 do R-COLNIZA (gateway 192.168.10.1)
+!------------------------------------------------------------------------------
+interface FastEthernet0/24
+ description UPLINK -> R-COLNIZA G0/0 (gateway 192.168.10.1)
+ switchport mode access
+ switchport access vlan 10
+exit
+
+!------------------------------------------------------------------------------
+! 6) Desliga portas nao usadas (boa pratica de seguranca)
+!------------------------------------------------------------------------------
+interface range FastEthernet0/21 - 23
+ description Porta nao utilizada - desativada
+ shutdown
+exit
+!
+interface range GigabitEthernet0/1 - 2
+ description Porta nao utilizada - desativada
+ shutdown
+exit
+
+!------------------------------------------------------------------------------
+! 7) Encerramento
+!------------------------------------------------------------------------------
+end
+write memory
+
+!==============================================================================
+! VERIFICACAO: show vlan brief | show interfaces status | show port-security
+!==============================================================================

@@ -1,0 +1,161 @@
+!==============================================================================
+! CONFIGURACAO CISCO 1941 - Roteador da Escola Municipal Rural de Colniza-MT
+! Global Solution 2026 - Stratfy - Network Architect Solutions
+!
+! Funcao: gateway das duas LANs /26 (Academica e Administrativa) e servidor
+!         DHCP. Uplink de Internet via antena/modem Starlink (rede de transito
+!         192.168.100.0/30).
+!
+! COERENCIA com redes/tabela_subredes.md:
+!   G0/0  -> 192.168.10.1/26   (gateway da rede ACADEMICA     192.168.10.0/26)
+!   G0/1  -> 192.168.10.65/26  (gateway da rede ADMINISTRATIVA 192.168.10.64/26)
+!   Rota default -> Starlink 192.168.100.1
+!
+! Para colar no Packet Tracer: entre em "configure terminal" (conf t) no CLI do
+! 1941 e cole as linhas abaixo (sem as linhas que comecam com "!" se preferir;
+! comentarios sao aceitos pelo IOS, mas para limpeza pode pular os blocos de
+! cabecalho). Veja docs/guia_packet_tracer.md.
+!==============================================================================
+
+enable
+configure terminal
+
+!------------------------------------------------------------------------------
+! 1) Identificacao e seguranca basica
+!------------------------------------------------------------------------------
+hostname R-COLNIZA
+!
+no ip domain-lookup
+ip domain-name escola.colniza.mt
+!
+! Senhas (em laboratorio; em producao usar segredos fortes/AAA)
+enable secret Stratfy@2026
+service password-encryption
+!
+banner motd #
+  ====================================================================
+   ESCOLA MUNICIPAL RURAL DE COLNIZA-MT - Roteador de borda (Starlink)
+   Acesso restrito. Uso exclusivo educacional. Global Solution 2026.
+  ====================================================================
+#
+!
+! Acesso de console e VTY (SSH preferencial)
+line console 0
+ password Console@2026
+ login
+ logging synchronous
+ exec-timeout 10 0
+exit
+!
+username admin privilege 15 secret Admin@2026
+line vty 0 4
+ login local
+ transport input ssh
+ exec-timeout 10 0
+exit
+!
+! Geracao de chave para SSH (no Packet Tracer rodar com dominio ja definido)
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+
+!------------------------------------------------------------------------------
+! 2) Interface LAN ACADEMICA -> rede 192.168.10.0/26 (gateway .1)
+!    Conecta ao Switch 2960 ACADEMICA (salas + laboratorio)
+!------------------------------------------------------------------------------
+interface GigabitEthernet0/0
+ description LAN-ACADEMICA -> SW-2960-ACADEMICA (192.168.10.0/26)
+ ip address 192.168.10.1 255.255.255.192
+ no shutdown
+exit
+
+!------------------------------------------------------------------------------
+! 3) Interface LAN ADMINISTRATIVA -> rede 192.168.10.64/26 (gateway .65)
+!    Conecta ao Switch 2960 ADMINISTRATIVA (coordenacao + administracao)
+!------------------------------------------------------------------------------
+interface GigabitEthernet0/1
+ description LAN-ADMIN -> SW-2960-ADMINISTRATIVA (192.168.10.64/26)
+ ip address 192.168.10.65 255.255.255.192
+ no shutdown
+exit
+
+!------------------------------------------------------------------------------
+! 4) Uplink WAN -> Modem/Antena Starlink (rede de transito 192.168.100.0/30)
+!    O 1941 esta equipado com um modulo EHWIC Gigabit (HWIC-1GE-SFP) no slot 0,
+!    que fornece a interface GigabitEthernet0/0/0 usada como porta WAN. Assim,
+!    G0/0 e G0/1 ficam dedicadas as duas LANs /26 (conforme exigido) e o uplink
+!    de satelite tem sua propria interface. No Packet Tracer: desligue o roteador,
+!    arraste o modulo Gigabit para o slot, religue e aplique a config abaixo.
+!    Veja docs/guia_packet_tracer.md.
+!------------------------------------------------------------------------------
+interface GigabitEthernet0/0/0
+ description WAN-UPLINK -> MODEM STARLINK (Internet via satelite LEO)
+ ip address 192.168.100.2 255.255.255.252
+ ip nat outside
+ no shutdown
+exit
+!
+! As LANs sao "ip nat inside" para sair via Starlink
+interface GigabitEthernet0/0
+ ip nat inside
+exit
+interface GigabitEthernet0/1
+ ip nat inside
+exit
+
+!------------------------------------------------------------------------------
+! 5) Rota default para a Internet (proximo salto = gateway Starlink)
+!------------------------------------------------------------------------------
+ip route 0.0.0.0 0.0.0.0 192.168.100.1
+
+!------------------------------------------------------------------------------
+! 6) NAT (sobrecarga/PAT) - as duas LANs compartilham o IP da Starlink
+!------------------------------------------------------------------------------
+access-list 1 permit 192.168.10.0 0.0.0.255
+ip nat inside source list 1 interface GigabitEthernet0/0/0 overload
+
+!------------------------------------------------------------------------------
+! 7) DHCP - enderecos reservados (NAO entregues automaticamente)
+!    Gateways das duas redes (.1/.65) + servidores locais (.2/.66)
+!    + IP de gerencia dos switches (.62 acad / .126 adm) para evitar conflito
+!------------------------------------------------------------------------------
+ip dhcp excluded-address 192.168.10.1 192.168.10.2
+ip dhcp excluded-address 192.168.10.62
+ip dhcp excluded-address 192.168.10.65 192.168.10.66
+ip dhcp excluded-address 192.168.10.126
+
+!------------------------------------------------------------------------------
+! 8) Pool DHCP da rede ACADEMICA (192.168.10.0/26)
+!    Entrega .3 ate .62 ; gateway .1 ; DNS publico (Google) + local
+!------------------------------------------------------------------------------
+ip dhcp pool ACADEMICA
+ network 192.168.10.0 255.255.255.192
+ default-router 192.168.10.1
+ dns-server 8.8.8.8 1.1.1.1
+ domain-name academica.escola.colniza.mt
+exit
+
+!------------------------------------------------------------------------------
+! 9) Pool DHCP da rede ADMINISTRATIVA (192.168.10.64/26)
+!    Entrega .67 ate .126 ; gateway .65
+!------------------------------------------------------------------------------
+ip dhcp pool ADMINISTRATIVA
+ network 192.168.10.64 255.255.255.192
+ default-router 192.168.10.65
+ dns-server 8.8.8.8 1.1.1.1
+ domain-name admin.escola.colniza.mt
+exit
+
+!------------------------------------------------------------------------------
+! 10) Encerramento e gravacao
+!------------------------------------------------------------------------------
+end
+write memory
+
+!==============================================================================
+! VERIFICACAO RAPIDA (comandos uteis no modo EXEC privilegiado):
+!   show ip interface brief        -> G0/0 .1 up, G0/1 .65 up
+!   show ip dhcp binding           -> enderecos .3+ e .67+ entregues aos PCs
+!   show ip dhcp pool              -> pools ACADEMICA e ADMINISTRATIVA
+!   show ip route                  -> rota default 0.0.0.0 via 192.168.100.1
+!   show ip nat translations       -> traducoes saindo pela Starlink
+!==============================================================================
