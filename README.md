@@ -48,6 +48,7 @@ real.
 
 | Artefato | Descrição |
 |---|---|
+| [`rede_escola_colniza.pkt`](rede_escola_colniza.pkt) | **Arquivo Cisco Packet Tracer** (50%): topologia lógica e física com Router 1941 + 2× Switch 2960 + hosts, DHCP, NAT e as duas sub-redes /26 configuradas |
 | [`docs/documento_projeto.md`](docs/documento_projeto.md) | **Documento principal** (50%): região, problema de conectividade, Starlink (velocidade/custos/justificativa), solução, sub-redes e impacto social |
 | [`docs/topologia.md`](docs/topologia.md) | Topologia física e lógica + diagrama **Mermaid** + lista de dispositivos e mapa de portas |
 | [`docs/guia_packet_tracer.md`](docs/guia_packet_tracer.md) | Passo a passo para montar o `.pkt` e validar (DHCP + ping entre redes) |
@@ -58,9 +59,12 @@ real.
 | [`configs/switch_2960_administrativa.txt`](configs/switch_2960_administrativa.txt) | Config do **Switch 2960** da rede Administrativa (VLAN 20) |
 | [`assets/prints/`](assets/prints/) | Local dos prints de cobertura Claro/TIM (ver `LEIAME.md`) |
 
-> **Nota:** o binário `.pkt` do Packet Tracer **não** é versionado (conforme
-> orientação). Todas as configurações, tabelas e o guia de montagem estão
-> prontos para reproduzir o `.pkt` em poucos minutos.
+> **Nota:** o arquivo **`rede_escola_colniza.pkt`** (Cisco Packet Tracer) está
+> versionado neste repositório. As configurações (`configs/`), a tabela de
+> sub-redes e o guia de montagem (`docs/guia_packet_tracer.md`) documentam e
+> reproduzem o projeto. **Pendência:** inserir os 2 prints de cobertura
+> (Claro/TIM) em `assets/prints/` e exportar o documento para PDF — ver
+> `assets/prints/LEIAME.md`.
 
 ---
 
